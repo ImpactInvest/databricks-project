@@ -1,0 +1,76 @@
+# Declarative Automation Bundle (formerly Databricks Asset Bundle).
+#   databricks bundle validate
+#   databricks bundle deploy
+#   databricks bundle run build_and_evaluate     # notebooks 00 to 07 in order
+#   databricks bundle run bakehouse_app          # start or restart the app (Free Edition apps stop after 24 hours)
+#
+# Jobs have no cluster definition, so they run on serverless compute (the only option on Free Edition).
+
+bundle:
+  name: databricks-genai-agent-eval
+
+variables:
+  serving_endpoint:
+    description: Name of the Model Serving endpoint created by notebooks/05_deploy_serving.py
+    default: bakehouse-agent
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+resources:
+  jobs:
+    build_and_evaluate:
+      name: bakehouse-agent-build-and-evaluate
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: setup
+          notebook_task:
+            notebook_path: ./notebooks/00_setup.py
+        - task_key: ingest
+          depends_on: [{ task_key: setup }]
+          notebook_task:
+            notebook_path: ./notebooks/01_ingest.py
+        - task_key: ai_search_index
+          depends_on: [{ task_key: ingest }]
+          notebook_task:
+            notebook_path: ./notebooks/02_ai_search_index.py
+        - task_key: tools_smoke_test
+          depends_on: [{ task_key: ai_search_index }]
+          notebook_task:
+            notebook_path: ./notebooks/03_tools_smoke_test.py
+        - task_key: log_register
+          depends_on: [{ task_key: tools_smoke_test }]
+          notebook_task:
+            notebook_path: ./notebooks/04_agent_log_register.py
+            base_parameters:
+              prompt_variant: baseline
+        - task_key: deploy_serving
+          depends_on: [{ task_key: log_register }]
+          notebook_task:
+            notebook_path: ./notebooks/05_deploy_serving.py
+            base_parameters:
+              alias: baseline
+        - task_key: build_golden_set
+          depends_on: [{ task_key: tools_smoke_test }]
+          notebook_task:
+            notebook_path: ./notebooks/06_build_golden_set.py
+        - task_key: evaluate_baseline
+          depends_on: [{ task_key: build_golden_set }, { task_key: log_register }]
+          notebook_task:
+            notebook_path: ./notebooks/07_evaluate_baseline.py
+            base_parameters:
+              prompt_variant: baseline
+              run_name: baseline
+
+  apps:
+    bakehouse_app:
+      name: bakehouse-agent-app
+      description: Chat front end for the Bakehouse tool-calling agent
+      source_code_path: ./app
+      resources:
+        - name: serving-endpoint
+          serving_endpoint:
+            name: ${var.serving_endpoint}
+            permission: CAN_QUERY

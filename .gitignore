@@ -1,0 +1,30 @@
+# Secrets and local credentials
+.env
+.env.*
+.databrickscfg
+*.pem
+*.key
+token*.txt
+
+# Runtime config written by notebooks/00_setup.py (workspace specific)
+config/runtime.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# MLflow / Databricks local state
+mlruns/
+mlartifacts/
+.databricks/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
+mlflow.db

@@ -1,0 +1,10 @@
+# Local development and CI (no Databricks connection needed)
+mlflow==3.16.1
+databricks-sdk==0.143.0
+openai==2.54.0
+httpx==0.28.1
+sqlglot==30.20.0
+pyyaml==6.0.3
+dspy==3.4.0
+pytest==9.1.1
+ruff==0.16.9

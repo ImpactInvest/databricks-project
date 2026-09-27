@@ -1,0 +1,78 @@
+# Project settings. Values here are defaults that are committed to Git.
+# notebooks/00_setup.py discovers workspace-specific values (the chosen LLM
+# endpoints, the SQL warehouse ID) and writes them to config/runtime.yaml,
+# which overrides this file and is not committed.
+
+catalog: workspace          # Free Edition default catalog
+schema: genai_agent
+volume: artefacts
+
+source:
+  catalog: samples
+  schema: bakehouse
+
+tables:
+  transactions: silver_transactions
+  customers: silver_customers
+  franchises: silver_franchises
+  suppliers: silver_suppliers
+  reviews: silver_reviews
+  reviews_chunked: reviews_chunked
+  golden_set: golden_set
+
+llm:
+  # Preference order; 00_setup picks the first one that exists in the workspace.
+  agent_endpoint_candidates:
+    - databricks-claude-sonnet-4-5
+    - databricks-claude-sonnet-4
+    - databricks-meta-llama-3-3-70b-instruct
+    - databricks-gpt-oss-120b
+  judge_endpoint_candidates:
+    - databricks-claude-sonnet-4-5
+    - databricks-meta-llama-3-3-70b-instruct
+    - databricks-gpt-oss-120b
+  agent_endpoint: null      # filled in by 00_setup
+  judge_endpoint: null      # filled in by 00_setup
+  temperature: 0.0
+  max_tokens: 1500
+
+ai_search:
+  endpoint_name: bakehouse-ai-search
+  index_name: reviews_chunked_index   # created as <catalog>.<schema>.<index_name>
+  embedding_endpoint: databricks-gte-large-en
+  pipeline_type: TRIGGERED
+  default_k: 5
+
+chunking:
+  max_words: 120
+  overlap_sentences: 1
+
+sql:
+  warehouse_id: null        # filled in by 00_setup
+  executor: auto            # auto | spark | warehouse
+  default_limit: 200
+  max_limit: 1000
+  timeout_seconds: 30
+  rows_shown_to_llm: 50
+
+agent:
+  max_tool_calls: 6
+  prompt_variant: baseline  # baseline | optimised
+
+serving:
+  model_name: bakehouse_agent         # registered as <catalog>.<schema>.<model_name>
+  endpoint_name: bakehouse-agent
+  scale_to_zero: true
+
+mlflow:
+  experiment_name: /Shared/bakehouse-genai-agent
+  # "uc" stores traces in Unity Catalog Delta tables (needs a SQL warehouse);
+  # "experiment" uses classic experiment storage. See docs/DESIGN.md.
+  trace_location: uc
+
+evaluation:
+  train_size: 30
+  split_seed: 17
+
+genie:
+  space_id: null            # paste the Genie Agent (space) ID here or in runtime.yaml
