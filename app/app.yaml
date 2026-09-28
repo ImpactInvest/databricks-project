@@ -1,0 +1,8 @@
+command: ["streamlit", "run", "app.py", "--server.headless", "true"]
+env:
+  - name: SERVING_ENDPOINT
+    valueFrom: serving-endpoint     # the app resource declared in databricks.yml
+  - name: MLFLOW_EXPERIMENT_NAME
+    value: /Shared/bakehouse-genai-agent
+  - name: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+    value: "false"

@@ -1,0 +1,16 @@
+# Versions checked against PyPI and the installed package sources on 2026-09-27.
+# Installed at the top of each notebook with %pip. Do not add databricks-openai
+# or databricks-connect: they replace the serverless Spark client (see DESIGN.md).
+
+# Agent runtime (also the pip_requirements of the served model, see 04_agent_log_register.py)
+mlflow[databricks]==3.16.1
+databricks-sdk==0.143.0
+databricks-ai-search==0.78      # formerly databricks-vectorsearch (now a deprecation shim)
+openai==2.54.0
+httpx==0.28.1
+sqlglot==30.20.0
+pyyaml==6.0.3
+
+# Evaluation, deployment and optimisation (notebooks only)
+databricks-agents==1.12.0
+dspy==3.4.0

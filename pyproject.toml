@@ -1,0 +1,20 @@
+[project]
+name = "databricks-genai-agent-eval"
+version = "0.1.0"
+description = "Tool-calling GenAI agent on Databricks, evaluated with MLflow 3 and optimised with DSPy"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B905"]
