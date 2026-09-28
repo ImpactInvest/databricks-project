@@ -106,9 +106,6 @@ class WarehouseExecutor:
     comes from the resources declared when the agent was logged.
     """
 
-    _INT_TYPES = {"BYTE", "SHORT", "INT", "LONG", "INTEGER", "BIGINT", "SMALLINT", "TINYINT"}
-    _FLOAT_TYPES = {"FLOAT", "DOUBLE", "DECIMAL"}
-
     def __init__(self, warehouse_id: str, workspace_client=None):
         if not warehouse_id:
             raise ValueError("sql.warehouse_id is not set; run notebooks/00_setup.py.")
@@ -147,20 +144,35 @@ class WarehouseExecutor:
         columns_meta = resp.manifest.schema.columns if resp.manifest and resp.manifest.schema else []
         columns = [c.name for c in columns_meta]
         types = [str(c.type_name.value if c.type_name else "STRING").upper() for c in columns_meta]
-        data = (resp.result.data_array if resp.result else None) or []
-        rows = [[self._cast(v, t) for v, t in zip(row, types)] for row in data]
+        data = list((resp.result.data_array if resp.result else None) or [])
+        # Large results arrive in chunks; the first one is inline in the response.
+        next_chunk = resp.result.next_chunk_index if resp.result else None
+        while next_chunk is not None:
+            chunk = self.w.statement_execution.get_statement_result_chunk_n(resp.statement_id, next_chunk)
+            data.extend(chunk.data_array or [])
+            next_chunk = chunk.next_chunk_index
+        rows = [[cast_value(v, t) for v, t in zip(row, types)] for row in data]
         return columns, rows
 
-    def _cast(self, value: str | None, type_name: str) -> Any:
-        if value is None:
-            return None
-        if type_name in self._INT_TYPES:
-            return int(value)
-        if type_name in self._FLOAT_TYPES:
-            return float(value)
-        if type_name == "BOOLEAN":
-            return value.lower() == "true"
-        return value
+
+_INT_TYPES = {"BYTE", "SHORT", "INT", "LONG", "INTEGER", "BIGINT", "SMALLINT", "TINYINT"}
+_FLOAT_TYPES = {"FLOAT", "DOUBLE", "DECIMAL"}
+
+
+def cast_value(value: str | None, type_name: str) -> Any:
+    """Cast one Statement Execution API value (always a string) to its Python type.
+
+    Shared with the Genie client, which receives the same result format.
+    """
+    if value is None:
+        return None
+    if type_name in _INT_TYPES:
+        return int(value)
+    if type_name in _FLOAT_TYPES:
+        return float(value)
+    if type_name == "BOOLEAN":
+        return value.lower() == "true"
+    return value
 
 
 def _short_error(e: Exception) -> str:

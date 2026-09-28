@@ -409,6 +409,18 @@ def _fill(template: str, values: dict[str, Any]) -> str:
     return template.format(**values)
 
 
+def sql_literal(value: Any) -> Any:
+    """Escape a value for use inside a single-quoted Databricks SQL string literal."""
+    if isinstance(value, str):
+        return value.replace("\\", "\\\\").replace("'", "\\'")
+    return value
+
+
+def _fill_sql(template: str, tables: dict[str, str], params: dict[str, Any]) -> str:
+    """Fill a SQL template: table names as they are, parameter values escaped."""
+    return template.format(**tables, **{k: sql_literal(v) for k, v in params.items()})
+
+
 def fact_values(columns: list[str], rows: list[list[Any]], params: dict[str, Any]) -> dict[str, Any]:
     """Values available to fact templates: params, first-row columns, and
     ``all_<column>`` (every row's value joined with 'and', for ties)."""
@@ -439,7 +451,7 @@ def build_sql_ground_truth(spec: dict, settings: Settings, run_query: RunQuery) 
     values = dict(params)
 
     if spec.get("reference_sql"):
-        sql = " ".join(_fill(spec["reference_sql"], {**tables, **params}).split())
+        sql = " ".join(_fill_sql(spec["reference_sql"], tables, params).split())
         cols, rows = run_query(sql)
         rows = [[to_jsonable(v) for v in r] for r in rows]
         if not rows or all(v is None for v in rows[0]):
@@ -482,11 +494,22 @@ def extract_review_facts(llm, model: str, question: str, reviews: list[dict]) ->
         model=model, messages=[{"role": "user", "content": prompt}], temperature=0.0, max_tokens=600
     )
     text = (resp.choices[0].message.content or "").strip()
-    text = text[text.find("{") : text.rfind("}") + 1]
-    parsed = json.loads(text)
+    start, end = text.find("{"), text.rfind("}")
+    try:
+        parsed = json.loads(text[start : end + 1]) if start != -1 and end > start else None
+    except json.JSONDecodeError:
+        parsed = None
+    if not isinstance(parsed, dict) or not parsed.get("facts"):
+        raise ValueError(f"The judge did not return usable JSON facts for {question!r}: {text[:300]}")
     known = {r["review_id"] for r in reviews}
-    ids = [int(i) for i in parsed.get("supporting_review_ids", []) if int(i) in known]
-    return {"facts": [str(f) for f in parsed.get("facts", [])], "supporting_review_ids": ids}
+    ids = []
+    for i in parsed.get("supporting_review_ids") or []:
+        try:
+            if int(i) in known and int(i) not in ids:
+                ids.append(int(i))
+        except (TypeError, ValueError):
+            continue  # ignore ids the judge made up in a non-numeric form
+    return {"facts": [str(f) for f in parsed["facts"]], "supporting_review_ids": ids}
 
 
 def build_record(

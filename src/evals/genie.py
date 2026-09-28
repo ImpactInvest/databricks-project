@@ -10,6 +10,8 @@ import time
 from datetime import timedelta
 from typing import Any
 
+from agent.tools import cast_value
+
 
 def parse_statement_response(statement_response) -> tuple[list[str], list[list[Any]]]:
     """Columns and rows from a SQL ``StatementResponse`` (values arrive as strings)."""
@@ -23,17 +25,7 @@ def parse_statement_response(statement_response) -> tuple[list[str], list[list[A
         else []
     )
     data = (statement_response.result.data_array if statement_response.result else None) or []
-    return columns, [[_cast(v, t) for v, t in zip(row, types)] for row in data]
-
-
-def _cast(value, type_name: str):
-    if value is None:
-        return None
-    if type_name in {"INT", "LONG", "SHORT", "BYTE", "BIGINT", "INTEGER"}:
-        return int(value)
-    if type_name in {"DOUBLE", "FLOAT", "DECIMAL"}:
-        return float(value)
-    return value
+    return columns, [[cast_value(v, t) for v, t in zip(row, types)] for row in data]
 
 
 def ask_genie(w, space_id: str, question: str, retries: int = 3) -> dict:

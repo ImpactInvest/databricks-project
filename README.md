@@ -77,7 +77,18 @@ pip install -r requirements-dev.txt
 ruff check src tests app && pytest -q
 ```
 
-The unit tests cover the SQL guard (over 30 cases, including injection attempts), tool output shapes and the agent loop with mocked clients, the scorers (including one run against a real local MLflow trace), the DSPy export and metric, and the Genie client. `tests/test_pipeline_spark.py` runs the PySpark transforms and all golden-set reference queries on a synthetic bakehouse-shaped dataset when local Spark is available.
+The unit tests (about 225, no Databricks connection needed) cover:
+
+* the SQL guard: over 45 cases, including injection attempts, forbidden tables in subqueries, `IDENTIFIER()` and path-based tables, and limit rewriting;
+* the tools and the agent loop with mocked clients: tool budget, parallel tool calls, bad or non-numeric arguments, failing tools (returned to the LLM as structured errors rather than ending the conversation) and citation parsing;
+* the SQL executors (Spark timeouts and interrupts, chunked SQL warehouse results), the LLM client's per-request token refresh and the MLflow setup;
+* settings loading, prompt variants and review chunking;
+* the golden set: every question template, SQL escaping of values picked from the data, ground-truth building with mocked queries, and parsing of the LLM-extracted review facts;
+* the evaluation: scorers against real local MLflow traces, the combined groundedness verdict, the per-question summary and pass definition, and a full `run_evaluation` on a local MLflow store;
+* packaging: the agent is logged as models-from-code, loaded back from its own artefacts and answers through MLflow's `ResponsesAgent` schema;
+* the DSPy export and metric, and the Genie client, including its error and rate-limit paths.
+
+`tests/test_pipeline_spark.py` runs the PySpark transforms and all golden-set reference queries on a synthetic bakehouse-shaped dataset when local Spark is available. CI runs it in a separate job with Java 17 and `pyspark==4.2.0`.
 
 ## Limitations and next steps
 

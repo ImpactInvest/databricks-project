@@ -196,6 +196,10 @@ def build_groundedness_scorer(judge_model: str | None):
     The built-in judge raises an error on traces without a RETRIEVER span
     (pure SQL questions). This wrapper returns "not applicable" instead, so
     the metric is averaged over retrieval questions only.
+
+    The judge returns one verdict per RETRIEVER span. A hybrid question can
+    search twice, so the verdicts are combined into one: the answer is
+    grounded only if every retrieval step supports it.
     """
     from mlflow.entities import SpanType
     from mlflow.genai.scorers import RetrievalGroundedness, scorer
@@ -206,9 +210,28 @@ def build_groundedness_scorer(judge_model: str | None):
     def retrieval_groundedness(trace):
         if not trace.search_spans(span_type=SpanType.RETRIEVER):
             return None
-        return judge(trace=trace)
+        return combine_feedbacks(judge(trace=trace), name="retrieval_groundedness")
 
     return retrieval_groundedness
+
+
+def combine_feedbacks(feedbacks, name: str):
+    """One yes/no Feedback from several: "no" if any says no, "yes" if all say yes.
+
+    Errors (feedbacks with no value) are kept only when nothing else is known.
+    """
+    from mlflow.entities import Feedback
+
+    if not isinstance(feedbacks, list):
+        return feedbacks
+    judged = [f for f in feedbacks if f.value is not None]
+    if not judged:
+        return feedbacks[0] if feedbacks else None
+    failed = [f for f in judged if not _is_yes(f.value)]
+    chosen = failed or judged
+    value = "no" if failed else "yes"
+    rationale = "\n\n".join(f.rationale for f in chosen if f.rationale)
+    return Feedback(name=name, value=value, rationale=rationale or None, source=chosen[0].source)
 
 
 GUIDELINES = {

@@ -150,6 +150,7 @@ def test_code_scorers_read_real_trace(tmp_path, monkeypatch):
     mlflow = pytest.importorskip("mlflow")
     monkeypatch.setenv("MLFLOW_TRACKING_URI", f"sqlite:///{tmp_path}/mlflow.db")
     mlflow.set_tracking_uri(f"sqlite:///{tmp_path}/mlflow.db")
+    mlflow.set_experiment("scorer-test")
 
     from agent.config import load_settings
     from agent.tools import run_sql

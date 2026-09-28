@@ -181,7 +181,7 @@ def test_warehouse_executor_casts_types():
     resp = NS(
         status=NS(state=StatementState.SUCCEEDED, error=None),
         manifest=NS(schema=NS(columns=[col("n", "LONG"), col("r", "DECIMAL"), col("p", "STRING")])),
-        result=NS(data_array=[["3", "1.50", "A"]]),
+        result=NS(data_array=[["3", "1.50", "A"]], next_chunk_index=None),
     )
     w = NS(statement_execution=NS(execute_statement=lambda **kw: resp))
     cols, rows = WarehouseExecutor("wh", workspace_client=w).execute("SELECT 1", 30)

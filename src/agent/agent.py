@@ -37,7 +37,14 @@ from agent.tools import (
     tool_specs,
 )
 
-CITATION_PATTERN = re.compile(r"review[\s_#:]*(\d+)", re.IGNORECASE)
+# Matches "[review 12]", "review #12", and lists such as "[reviews 12, 15 and 18]".
+CITATION_PATTERN = re.compile(r"reviews?[\s_#:]*(\d+(?:\s*(?:,|and|&)\s*#?\d+)*)", re.IGNORECASE)
+_DIGITS = re.compile(r"\d+")
+
+
+def cited_ids(answer: str) -> set[int]:
+    """Every review id the answer cites."""
+    return {int(n) for group in CITATION_PATTERN.findall(answer or "") for n in _DIGITS.findall(group)}
 
 
 @dataclass
@@ -52,7 +59,7 @@ class TurnState:
 
     def as_custom_outputs(self, answer: str) -> dict:
         retrieved_ids = {r["review_id"] for r in self.retrieved_reviews}
-        cited = sorted({int(m) for m in CITATION_PATTERN.findall(answer or "")} & retrieved_ids)
+        cited = sorted(cited_ids(answer) & retrieved_ids)
         return {
             "tool_calls": self.tool_calls,
             "sql_queries": self.sql_queries,
@@ -108,9 +115,19 @@ class BakehouseAgent(ResponsesAgent):
         try:
             args = json.loads(raw_args or "{}")
         except json.JSONDecodeError:
+            args = None
+        if not isinstance(args, dict):
             return json.dumps(
-                {"error": {"type": "bad_arguments", "message": "Arguments were not valid JSON."}}
+                {"error": {"type": "bad_arguments", "message": "Arguments were not a valid JSON object."}}
             )
+        try:
+            return self._dispatch(name, args, state)
+        except (TypeError, ValueError) as e:
+            return json.dumps({"error": {"type": "bad_arguments", "message": str(e)[:300]}})
+        except Exception as e:  # noqa: BLE001 - a failing tool must not end the conversation
+            return json.dumps({"error": {"type": "tool_error", "message": f"{type(e).__name__}: {e}"[:500]}})
+
+    def _dispatch(self, name: str, args: dict, state: TurnState) -> str:
 
         if name == "query_sales_data":
             result = self.text2sql(str(args.get("question", "")))
@@ -129,6 +146,10 @@ class BakehouseAgent(ResponsesAgent):
         if name == "search_reviews":
             k = min(max(int(args.get("k") or self.settings["ai_search"]["default_k"]), 1), 10)
             franchise_id = args.get("franchise_id")
+            if franchise_id in ("", None):
+                franchise_id = None
+            else:
+                franchise_id = int(franchise_id)
             hits = self.review_search(str(args.get("query", "")), franchise_id=franchise_id, k=k)
             state.retrieved_reviews.extend(hits)
             if not hits:

@@ -170,3 +170,52 @@ def test_error_dict_shape():
     r = guard("DROP TABLE silver_transactions")
     d = r.to_error_dict()
     assert d["type"] == "guard_rejected" and d["message"] and d["hint"]
+
+
+# --- further bypass attempts --------------------------------------------------
+
+
+def test_identifier_clause_is_rejected():
+    assert not guard("SELECT * FROM IDENTIFIER('samples.bakehouse.sales_customers')").ok
+
+
+def test_path_based_table_is_rejected():
+    assert not guard("SELECT * FROM delta.`/Volumes/workspace/genai_agent/artefacts/x`").ok
+
+
+def test_forbidden_table_in_where_subquery_is_rejected():
+    r = guard(
+        "SELECT * FROM silver_transactions WHERE customer_id IN "
+        "(SELECT customer_id FROM samples.bakehouse.sales_customers)"
+    )
+    assert not r.ok and "allowlist" in r.error
+
+
+def test_nested_cte_name_cannot_shadow_a_real_table_outside_its_scope():
+    # The outer reference to sales_customers must never reach a real table. sqlglot
+    # hoists the nested CTE to the top of the rewritten query, so it resolves to the CTE.
+    r = guard(
+        "SELECT * FROM (WITH sales_customers AS (SELECT 1 AS a) SELECT * FROM sales_customers) s "
+        "CROSS JOIN sales_customers CROSS JOIN silver_transactions"
+    )
+    assert r.ok and r.sql.startswith("WITH sales_customers AS")
+
+
+def test_negative_or_expression_limits_fall_back_to_default():
+    assert guard("SELECT * FROM silver_transactions LIMIT -1").sql.endswith("LIMIT 200")
+    assert guard("SELECT * FROM silver_transactions LIMIT 10 * 1000").sql.endswith("LIMIT 200")
+
+
+def test_offset_is_kept_and_limit_capped():
+    r = guard("SELECT * FROM silver_transactions LIMIT 5000 OFFSET 10", max_limit=1000)
+    assert r.ok and "LIMIT 1000" in r.sql and "OFFSET 10" in r.sql
+
+
+def test_lateral_view_and_time_travel_on_allowed_table_are_fine():
+    assert guard("SELECT * FROM silver_transactions LATERAL VIEW explode(array(1)) t AS c").ok
+    assert guard("SELECT * FROM silver_transactions VERSION AS OF 1").ok
+
+
+def test_backquoted_and_escaped_literals_are_handled():
+    r = guard("SELECT * FROM `silver_franchises` WHERE franchise_name = 'Baker\\'s Delight'")
+    assert r.ok and "workspace.genai_agent.silver_franchises" in r.sql

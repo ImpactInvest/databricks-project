@@ -49,7 +49,8 @@ def settings():
 
 
 def _source_frames(spark):
-    products = ["Golden Gate Ginger", "Outback Oatmeal", "Tokyo Tidbits"]
+    # "Baker's Delight" sorts first, so the questions that pick MIN(product) exercise quote escaping.
+    products = ["Golden Gate Ginger", "Baker's Delight", "Tokyo Tidbits"]
     tx = []
     for i in range(1, 61):
         tx.append(
